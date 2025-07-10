@@ -120,56 +120,88 @@ end
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
+-- GUI section starts here
 local gui = Instance.new("ScreenGui")
 gui.Name = "RandomizerGUI"
 gui.ResetOnSpawn = false
 gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local stopBtn = Instance.new("TextButton", gui)
-stopBtn.Size = UDim2.new(0, 150, 0, 40)
-stopBtn.Position = UDim2.new(1, -190, 0, 0)
-stopBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-stopBtn.TextColor3 = Color3.new(1, 1, 1)
-stopBtn.Text = "[A] Auto Stop: ON"
-stopBtn.TextScaled = true
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 170, 0, 135)
+frame.Position = UDim2.new(1, -185, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.BorderSizePixel = 0
+frame.BackgroundTransparency = 0.1
+frame.ClipsDescendants = true
+frame.Parent = gui
+frame.AnchorPoint = Vector2.new(1, 0)
+frame.Name = "MainUI"
+
+local uicorner = Instance.new("UICorner", frame)
+uicorner.CornerRadius = UDim.new(0, 8)
+
+local layout = Instance.new("UIListLayout", frame)
+layout.Padding = UDim.new(0, 6)
+layout.FillDirection = Enum.FillDirection.Vertical
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+local function createButton(text)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -10, 0, 30)
+	btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Text = text
+	btn.TextScaled = true
+	btn.Font = Enum.Font.SourceSansBold
+
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0, 6)
+
+	btn.MouseEnter:Connect(function()
+		btn.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
+	end)
+	btn.MouseLeave:Connect(function()
+		btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	end)
+
+	return btn
+end
+
+-- Auto Stop Toggle
+local stopBtn = createButton("[A] Auto Stop: ON")
+stopBtn.Parent = frame
 
 stopBtn.MouseButton1Click:Connect(function()
-    autoStopOn = not autoStopOn
-    stopBtn.Text = autoStopOn and "[A] Auto Stop: ON" or "[A] Auto Stop: OFF"
+	autoStopOn = not autoStopOn
+	stopBtn.Text = autoStopOn and "[A] Auto Stop: ON" or "[A] Auto Stop: OFF"
 end)
 
-local info = Instance.new("TextButton", gui)
-info.Size = UDim2.new(0, 30, 0, 40)
-info.Position = UDim2.new(1, -35, 0, 0)
-info.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-info.TextColor3 = Color3.new(1, 1, 1)
-info.Text = "?"
-info.TextScaled = true
-
-info.MouseButton1Click:Connect(function()
-    pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Info",
-            Text = "Auto Stop when found: Raccoon, Dragonfly, Queen Bee, Red Fox, Disco Bee, Butterfly.",
-            Duration = 5
-        })
-    end)
-end)
-
-local autoBtn = Instance.new("TextButton", gui)
-autoBtn.Size = UDim2.new(0, 150, 0, 40)
-autoBtn.Position = UDim2.new(1, -190, 0, 45)
-autoBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-autoBtn.TextColor3 = Color3.new(1, 1, 1)
-autoBtn.Text = "[B] Reroll Pet Display"
-autoBtn.TextScaled = true
+-- Reroll Button
+local autoBtn = createButton("[B] Reroll Pet Display")
+autoBtn.Parent = frame
 
 autoBtn.MouseButton1Click:Connect(function()
-    for objectId, data in pairs(displayedEggs) do
-        local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
-        if pet and data.label then
-            data.label.Text = data.eggName .. " | " .. pet
-            data.lastPet = pet
-        end
-    end
+	for objectId, data in pairs(displayedEggs) do
+		local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
+		if pet and data.label then
+			data.label.Text = data.eggName .. " | " .. pet
+			data.lastPet = pet
+		end
+	end
+end)
+
+-- Info Button
+local infoBtn = createButton("?")
+infoBtn.Size = UDim2.new(0, 40, 0, 30)
+infoBtn.Parent = frame
+
+infoBtn.MouseButton1Click:Connect(function()
+	pcall(function()
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = "Info",
+			Text = "Auto Stop when found: Raccoon, Dragonfly, Queen Bee, Red Fox, Disco Bee, Butterfly.",
+			Duration = 5
+		})
+	end)
 end)

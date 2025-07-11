@@ -23,64 +23,90 @@ local realESP = {
 local displayedEggs = {}
 local autoStopOn = true
 
+-- DEBUG: Print all egg names to verify they match
+print("Available egg types:")
+for eggName in pairs(eggChances) do
+    print("  - " .. eggName)
+end
+
 local function weightedRandom(options)
-    local valid = {}
-    for pet, chance in pairs(options) do
-        if chance > 0 then table.insert(valid, {pet = pet, chance = chance}) end
-    end
-    if #valid == 0 then return nil end
     local total = 0
-    for _, v in ipairs(valid) do total += v.chance end
-    local roll = math.random() * total
+    for _, chance in pairs(options) do total = total + chance end
+    
+    local randomValue = math.random() * total
     local cumulative = 0
-    for _, v in ipairs(valid) do
-        cumulative += v.chance
-        if roll <= cumulative then return v.pet end
+    
+    for pet, chance in pairs(options) do
+        cumulative = cumulative + chance
+        if randomValue <= cumulative then
+            return pet
+        end
     end
-    return valid[1].pet
+    
+    return next(options)  -- Fallback to first pet
 end
 
 local function getNonRepeatingRandomPet(eggName, lastPet)
     local pool = eggChances[eggName]
-    if not pool then return nil end
-    local tries, selectedPet = 0, lastPet
-    while tries < 5 do
-        local pet = weightedRandom(pool)
-        if not pet then return nil end
-        if pet ~= lastPet or math.random() < 0.3 then
-            selectedPet = pet
-            break
-        end
-        tries += 1
+    if not pool then 
+        warn("Egg type not found in chances: " .. tostring(eggName))
+        return "?"  -- Return question mark if egg type not found
     end
-    return selectedPet
+    
+    local tries = 0
+    local maxTries = 10
+    
+    while tries < maxTries do
+        local pet = weightedRandom(pool)
+        if pet ~= lastPet or math.random() < 0.3 then
+            return pet
+        end
+        tries = tries + 1
+    end
+    
+    -- If we couldn't find a different pet, just return a random one
+    return weightedRandom(pool)
 end
 
 local function createEspGui(object, labelText)
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "FakePetESP"
-    billboard.Adornee = object:FindFirstChildWhichIsA("BasePart") or object.PrimaryPart or object
+    billboard.Name = "PetESP"
+    billboard.AlwaysOnTop = true
     billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.AlwaysOnTop = true
+    
+    -- Find a valid part to attach to
+    local adornee = object:FindFirstChildWhichIsA("BasePart") or object.PrimaryPart
+    if not adornee then
+        warn("No valid part found for ESP on:", object.Name)
+        return nil
+    end
+    billboard.Adornee = adornee
+    
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
     label.TextScaled = true
-    label.Font = Enum.Font.SourceSansBold
+    label.Font = Enum.Font.GothamBold
     label.Text = labelText
     label.Parent = billboard
-    billboard.Parent = game:GetService("CoreGui")  -- Always parent to CoreGui for visibility
+    
+    billboard.Parent = game:GetService("CoreGui")  -- Always show in CoreGui
     return billboard
 end
 
 local function addESP(egg)
     if egg:GetAttribute("OWNER") ~= localPlayer.Name then return end
+    
     local eggName = egg:GetAttribute("EggName")
     local objectId = egg:GetAttribute("OBJECT_UUID")
+    
     if not eggName or not objectId or displayedEggs[objectId] then return end
+    
+    -- DEBUG: Show what egg we're processing
+    print("Processing egg:", eggName, "with UUID:", objectId)
+    
     local labelText, firstPet
     if realESP[eggName] then
         labelText = eggName
@@ -88,14 +114,17 @@ local function addESP(egg)
         firstPet = getNonRepeatingRandomPet(eggName, nil)
         labelText = eggName .. " | " .. (firstPet or "?")
     end
+    
     local espGui = createEspGui(egg, labelText)
-    displayedEggs[objectId] = {
-        egg = egg,
-        gui = espGui,
-        label = espGui:FindFirstChild("TextLabel"),
-        eggName = eggName,
-        lastPet = firstPet
-    }
+    if espGui then
+        displayedEggs[objectId] = {
+            egg = egg,
+            gui = espGui,
+            label = espGui:FindFirstChild("TextLabel"),
+            eggName = eggName,
+            lastPet = firstPet
+        }
+    end
 end
 
 local function removeESP(egg)
@@ -106,6 +135,7 @@ local function removeESP(egg)
     end
 end
 
+-- Connect all existing and future eggs
 for _, egg in collectionService:GetTagged("PetEggServer") do
     addESP(egg)
 end
@@ -155,26 +185,33 @@ autoBtn.TextColor3 = Color3.new(1, 1, 1)
 autoBtn.Text = "[B] Reroll Pet Display"
 autoBtn.TextScaled = true
 autoBtn.MouseButton1Click:Connect(function()
-    print("Rerolling pets...")
+    print("REROLLING PETS - Starting...")
     for objectId, data in pairs(displayedEggs) do
-        print("Rerolling egg:", data.eggName)
+        print("Rerolling:", data.eggName)
+        
         local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
         if pet then
-            print("New pet:", pet)
-            -- Remove old GUI
+            print("New pet for", data.eggName, ":", pet)
+            
+            -- Destroy old GUI
             if data.gui then
                 data.gui:Destroy()
             end
+            
             -- Create new GUI with updated pet name
             local newGui = createEspGui(data.egg, data.eggName .. " | " .. pet)
-            displayedEggs[objectId] = {
-                egg = data.egg,
-                gui = newGui,
-                label = newGui:FindFirstChild("TextLabel"),
-                eggName = data.eggName,
-                lastPet = pet
-            }
+            if newGui then
+                displayedEggs[objectId] = {
+                    egg = data.egg,
+                    gui = newGui,
+                    label = newGui:FindFirstChild("TextLabel"),
+                    eggName = data.eggName,
+                    lastPet = pet
+                }
+            end
+        else
+            print("ERROR: Failed to get pet for", data.eggName)
         end
     end
-    print("Reroll complete!")
+    print("REROLLING PETS - Complete!")
 end)

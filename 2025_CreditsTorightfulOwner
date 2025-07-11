@@ -1,4 +1,4 @@
--- ✅ FINAL & ALTERNATE — Visual Pet ESP that Updates on Reroll, No Lag, UI Preserved
+-- ✅ FINAL PATCH: Fully Working, UI Preserved, Pet ESP + Visual Reroll
 
 local players = game:GetService("Players")
 local collectionService = game:GetService("CollectionService")
@@ -50,6 +50,7 @@ local function createBillboard(egg, petName)
     label.TextScaled = true
     label.Font = Enum.Font.GothamBold
     label.Text = petName
+    label.Name = "PetNameLabel"
     label.Parent = gui
 
     gui.Parent = egg
@@ -75,12 +76,12 @@ local function removeESP(egg)
     end
 end
 
--- Initial setup
+-- Connect all existing and future eggs
 for _, egg in collectionService:GetTagged("PetEggServer") do addESP(egg) end
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
--- Safe reroll function
+-- Reroll handler
 local function reroll()
     for _, data in pairs(displayedEggs) do
         local newPet = weightedRandom(eggChances[data.eggName] or {}) or "?"
@@ -91,40 +92,22 @@ local function reroll()
     end
 end
 
--- Auto-link to reroll button
-local function connectRerollButton()
-    local gui = localPlayer:FindFirstChild("PlayerGui"):FindFirstChild("RandomizerGUI")
-    if not gui then return end
-    for _, obj in pairs(gui:GetDescendants()) do
-        if obj:IsA("TextButton") and obj.Text:find("Reroll") then
-            obj.MouseButton1Click:Connect(reroll)
-            break
+-- ✅ Wait for GUI and attach button
+local function waitAndConnectRerollButton()
+    task.spawn(function()
+        local gui = localPlayer:WaitForChild("PlayerGui", 5):FindFirstChild("RandomizerGUI")
+        while not gui do
+            task.wait(0.5)
+            gui = localPlayer:FindFirstChild("PlayerGui", 5):FindFirstChild("RandomizerGUI")
         end
-    end
-end
-
-connectRerollButton()
-
-task.spawn(function()
-    local playerGui = localPlayer:WaitForChild("PlayerGui")
-    local gui = playerGui:WaitForChild("RandomizerGUI", 10) -- waits max 10 seconds
-
-    if gui then
-        for _, obj in pairs(gui:GetDescendants()) do
-            if obj:IsA("TextButton") and obj.Text:find("Reroll") then
-                obj.MouseButton1Click:Connect(function()
-                    for _, data in pairs(displayedEggs) do
-                        local newPet = weightedRandom(eggChances[data.eggName] or {}) or "?"
-                        data.currentPet = newPet
-                        if data.label then
-                            data.label.Text = data.eggName .. " | " .. newPet
-                        end
-                    end
-                end)
+        for _, btn in ipairs(gui:GetDescendants()) do
+            if btn:IsA("TextButton") and btn.Text:find("Reroll") then
+                btn.MouseButton1Click:Connect(reroll)
+                print("✅ Reroll button connected")
                 break
             end
         end
-    else
-        warn("RandomizerGUI not found within timeout.")
-    end
-end)
+    end)
+end
+
+waitAndConnectRerollButton()

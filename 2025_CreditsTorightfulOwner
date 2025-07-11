@@ -1,11 +1,8 @@
--- ✅ FINAL PATCH: Fully Working, UI Preserved, Pet ESP + Visual Reroll
-
 local players = game:GetService("Players")
 local collectionService = game:GetService("CollectionService")
 local userInputService = game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
 local localPlayer = players.LocalPlayer or players:GetPlayers()[1]
-
 local eggChances = {
     ["Common Egg"] = { ["Dog"] = 33, ["Bunny"] = 33, ["Golden Lab"] = 33 },
     ["Uncommon Egg"] = { ["Black Bunny"] = 25, ["Chicken"] = 25, ["Cat"] = 25, ["Deer"] = 25 },
@@ -33,15 +30,24 @@ local function weightedRandom(tbl)
         sum += chance
         if r <= sum then return pet end
     end
+    return "?"  -- Fallback
 end
 
 local function createBillboard(egg, petName)
+    -- Find a valid part to attach to
+    local adornee = egg:FindFirstChildWhichIsA("BasePart") or egg.PrimaryPart
+    if not adornee then
+        warn("No valid part found for egg:", egg.Name)
+        return nil
+    end
+
     local gui = Instance.new("BillboardGui")
     gui.Name = "PetESP"
-    gui.Adornee = egg:FindFirstChildWhichIsA("BasePart") or egg.PrimaryPart or egg
+    gui.Adornee = adornee
     gui.Size = UDim2.new(0, 200, 0, 50)
     gui.StudsOffset = Vector3.new(0, 3, 0)
     gui.AlwaysOnTop = true
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
@@ -53,31 +59,43 @@ local function createBillboard(egg, petName)
     label.Name = "PetNameLabel"
     label.Parent = gui
 
-    gui.Parent = egg
+    -- Make GUI more visible
+    gui.Parent = game:GetService("CoreGui")  -- Always show in CoreGui
     return label
 end
 
 local function addESP(egg)
     if egg:GetAttribute("OWNER") ~= localPlayer.Name then return end
+    
     local eggName = egg:GetAttribute("EggName")
     local uuid = egg:GetAttribute("OBJECT_UUID")
+    
     if not eggName or not uuid or displayedEggs[uuid] then return end
+    
     local chosenPet = weightedRandom(eggChances[eggName] or {}) or "?"
     local label = createBillboard(egg, eggName .. " | " .. chosenPet)
-    displayedEggs[uuid] = { egg = egg, label = label, eggName = eggName, currentPet = chosenPet }
+    
+    if label then
+        displayedEggs[uuid] = { egg = egg, label = label, eggName = eggName, currentPet = chosenPet }
+    end
 end
 
 local function removeESP(egg)
     local uuid = egg:GetAttribute("OBJECT_UUID")
     local data = displayedEggs[uuid]
     if data then
-        if data.label and data.label.Parent then data.label.Parent:Destroy() end
+        if data.label and data.label.Parent then
+            data.label:Destroy()
+        end
         displayedEggs[uuid] = nil
     end
 end
 
 -- Connect all existing and future eggs
-for _, egg in collectionService:GetTagged("PetEggServer") do addESP(egg) end
+for _, egg in collectionService:GetTagged("PetEggServer") do
+    addESP(egg)
+end
+
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
@@ -92,21 +110,37 @@ local function reroll()
     end
 end
 
--- ✅ Wait for GUI and attach button
+-- ✅ Improved GUI connection
 local function waitAndConnectRerollButton()
     task.spawn(function()
-        local gui = localPlayer:WaitForChild("PlayerGui", 5):FindFirstChild("RandomizerGUI")
-        while not gui do
+        local gui = nil
+        local attempts = 0
+        local maxAttempts = 20
+        
+        -- Wait for GUI to appear
+        while attempts < maxAttempts do
+            gui = localPlayer:FindFirstChild("PlayerGui") and localPlayer.PlayerGui:FindFirstChild("RandomizerGUI")
+            if gui then break end
+            
             task.wait(0.5)
-            gui = localPlayer:FindFirstChild("PlayerGui", 5):FindFirstChild("RandomizerGUI")
+            attempts += 1
         end
+        
+        if not gui then
+            warn("RandomizerGUI not found after", maxAttempts, "attempts")
+            return
+        end
+        
+        -- Find the reroll button
         for _, btn in ipairs(gui:GetDescendants()) do
             if btn:IsA("TextButton") and btn.Text:find("Reroll") then
                 btn.MouseButton1Click:Connect(reroll)
                 print("✅ Reroll button connected")
-                break
+                return
             end
         end
+        
+        warn("Reroll button not found in RandomizerGUI")
     end)
 end
 

@@ -1,4 +1,4 @@
--- ✅ FINAL VERSION — Visual Pet ESP with Working Reroll
+-- ✅ Optimized Visual Pet ESP with Working Reroll & UI Preserved
 
 local players = game:GetService("Players")
 local collectionService = game:GetService("CollectionService")
@@ -24,32 +24,20 @@ local eggChances = {
 
 local displayedEggs = {}
 
-local function weightedRandom(options)
-    local totalWeight = 0
-    local choices = {}
-    for pet, weight in pairs(options) do
-        if weight > 0 then
-            totalWeight += weight
-            table.insert(choices, {name = pet, weight = weight})
-        end
+local function weightedRandom(choices)
+    local total = 0
+    for _, chance in pairs(choices) do
+        total += chance
     end
-    local r = math.random() * totalWeight
-    local sum = 0
-    for _, entry in ipairs(choices) do
-        sum += entry.weight
-        if r <= sum then return entry.name end
+    local roll = math.random() * total
+    local cumulative = 0
+    for name, chance in pairs(choices) do
+        cumulative += chance
+        if roll <= cumulative then return name end
     end
 end
 
-local function getRandomPet(eggName, exclude)
-    local pet = weightedRandom(eggChances[eggName] or {})
-    while pet == exclude do
-        pet = weightedRandom(eggChances[eggName] or {})
-    end
-    return pet
-end
-
-local function createEsp(egg, petName)
+local function createESPLabel(egg, text)
     local gui = Instance.new("BillboardGui")
     gui.Name = "PetESP"
     gui.Adornee = egg:FindFirstChildWhichIsA("BasePart") or egg.PrimaryPart or egg
@@ -61,14 +49,23 @@ local function createEsp(egg, petName)
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
     label.TextScaled = true
     label.Font = Enum.Font.GothamBold
-    label.Text = petName
+    label.Text = text
     label.Parent = gui
 
     gui.Parent = egg
-    return gui, label
+    return label
+end
+
+local function updateESP(objectId)
+    local data = displayedEggs[objectId]
+    if not data then return end
+    local newPet = weightedRandom(eggChances[data.eggName] or {}) or "?"
+    data.lastPet = newPet
+    if data.label then
+        data.label.Text = data.eggName .. " | " .. newPet
+    end
 end
 
 local function addESP(egg)
@@ -76,17 +73,16 @@ local function addESP(egg)
     local eggName = egg:GetAttribute("EggName")
     local id = egg:GetAttribute("OBJECT_UUID")
     if not eggName or not id or displayedEggs[id] then return end
-    local pet = getRandomPet(eggName)
-    local gui, label = createEsp(egg, eggName .. " | " .. (pet or "?"))
+    local pet = weightedRandom(eggChances[eggName] or {}) or "?"
+    local label = createESPLabel(egg, eggName .. " | " .. pet)
     displayedEggs[id] = { egg = egg, label = label, eggName = eggName, lastPet = pet }
 end
 
 local function removeESP(egg)
     local id = egg:GetAttribute("OBJECT_UUID")
     if displayedEggs[id] then
-        local data = displayedEggs[id]
-        if data.label and data.label.Parent then
-            data.label.Parent:Destroy()
+        if displayedEggs[id].label and displayedEggs[id].label.Parent then
+            displayedEggs[id].label.Parent:Destroy()
         end
         displayedEggs[id] = nil
     end
@@ -95,37 +91,25 @@ end
 for _, egg in collectionService:GetTagged("PetEggServer") do
     addESP(egg)
 end
-
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
--- REROLL FUNCTION
-_G.TriggerPetESP_Reroll = function()
-    for _, data in pairs(displayedEggs) do
-        local newPet = getRandomPet(data.eggName, data.lastPet)
-        data.lastPet = newPet
-        data.label.Text = data.eggName .. " | " .. newPet
-    end
-end
-
--- CONNECT TO REROLL BUTTON IF EXISTS
-local function tryAttachToButton()
+-- 🔁 Hook to Button Logic
+local function tryConnectToReroll()
     local playerGui = localPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return end
     local gui = playerGui:FindFirstChild("RandomizerGUI")
     if not gui then return end
-    local rerollBtn
-    for _, desc in ipairs(gui:GetDescendants()) do
-        if desc:IsA("TextButton") and desc.Text:find("Reroll") then
-            rerollBtn = desc
+    for _, obj in pairs(gui:GetDescendants()) do
+        if obj:IsA("TextButton") and obj.Text:find("Reroll") then
+            obj.MouseButton1Click:Connect(function()
+                for objectId, _ in pairs(displayedEggs) do
+                    updateESP(objectId)
+                end
+            end)
             break
         end
     end
-    if rerollBtn then
-        rerollBtn.MouseButton1Click:Connect(function()
-            if _G.TriggerPetESP_Reroll then _G.TriggerPetESP_Reroll() end
-        end)
-    end
 end
 
-tryAttachToButton()
+tryConnectToReroll()

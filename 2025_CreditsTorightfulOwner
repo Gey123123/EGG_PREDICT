@@ -4,10 +4,8 @@ local userInputService = game:GetService("UserInputService")
 local tweenService = game:GetService("TweenService")
 local localPlayer = players.LocalPlayer or players:GetPlayers()[1]
 
--- Egg chances remain unchanged (cut for brevity, use your full eggChances table here)
 local eggChances = {
     ["Common Egg"] = {["Dog"] = 33, ["Bunny"] = 33, ["Golden Lab"] = 33},
-    -- ... (rest of your eggChances)
     ["Premium Night Egg"] = {["Hedgehog"] = 50, ["Mole"] = 26, ["Frog"] = 14, ["Echo Frog"] = 10}
 }
 
@@ -20,36 +18,23 @@ local displayedEggs = {}
 local autoStopOn = true
 
 local function weightedRandom(options)
-    local valid = {}
+    local total, selected = 0, nil
+    for _, chance in pairs(options) do total += chance end
+    local roll, cumulative = math.random() * total, 0
     for pet, chance in pairs(options) do
-        if chance > 0 then table.insert(valid, {pet = pet, chance = chance}) end
+        cumulative += chance
+        if roll <= cumulative then return pet end
     end
-    if #valid == 0 then return nil end
-    local total = 0
-    for _, v in ipairs(valid) do total += v.chance end
-    local roll = math.random() * total
-    local cumulative = 0
-    for _, v in ipairs(valid) do
-        cumulative += v.chance
-        if roll <= cumulative then return v.pet end
-    end
-    return valid[1].pet
 end
 
 local function getNonRepeatingRandomPet(eggName, lastPet)
     local pool = eggChances[eggName]
     if not pool then return nil end
-    local tries, selectedPet = 0, lastPet
-    while tries < 5 do
+    for _ = 1, 5 do
         local pet = weightedRandom(pool)
-        if not pet then return nil end
-        if pet ~= lastPet or math.random() < 0.3 then
-            selectedPet = pet
-            break
-        end
-        tries += 1
+        if pet ~= lastPet or math.random() < 0.3 then return pet end
     end
-    return selectedPet
+    return lastPet
 end
 
 local function createEspGui(object, labelText)
@@ -71,7 +56,7 @@ local function createEspGui(object, labelText)
     label.Parent = billboard
 
     billboard.Parent = object
-    return billboard
+    return billboard, label
 end
 
 local function addESP(egg)
@@ -80,19 +65,18 @@ local function addESP(egg)
     local objectId = egg:GetAttribute("OBJECT_UUID")
     if not eggName or not objectId or displayedEggs[objectId] then return end
 
-    local labelText, firstPet
-    if realESP[eggName] then
-        labelText = eggName
-    else
+    local firstPet = nil
+    local labelText = eggName
+    if not realESP[eggName] then
         firstPet = getNonRepeatingRandomPet(eggName, nil)
         labelText = eggName .. " | " .. (firstPet or "?")
     end
 
-    local espGui = createEspGui(egg, labelText)
+    local gui, label = createEspGui(egg, labelText)
     displayedEggs[objectId] = {
         egg = egg,
-        gui = espGui,
-        label = espGui:FindFirstChild("TextLabel"),
+        gui = gui,
+        label = label,
         eggName = eggName,
         lastPet = firstPet
     }
@@ -106,14 +90,11 @@ local function removeESP(egg)
     end
 end
 
-for _, egg in collectionService:GetTagged("PetEggServer") do
-    addESP(egg)
-end
-
+for _, egg in collectionService:GetTagged("PetEggServer") do addESP(egg) end
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
--- === UI START ===
+-- UI
 local gui = Instance.new("ScreenGui")
 gui.Name = "RandomizerGUI"
 gui.ResetOnSpawn = false
@@ -126,7 +107,7 @@ frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 frame.BorderSizePixel = 0
 frame.AnchorPoint = Vector2.new(1, 0)
 frame.Active = true
-frame.Draggable = false -- we'll do custom drag
+frame.Draggable = false
 frame.Parent = gui
 
 local shadow = Instance.new("UICorner", frame)
@@ -148,7 +129,6 @@ layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 layout.SortOrder = Enum.SortOrder.LayoutOrder
 layout.VerticalAlignment = Enum.VerticalAlignment.Top
 
--- Hovering Button Maker
 local function createFancyButton(text, baseColor)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -12, 0, 34)
@@ -157,12 +137,10 @@ local function createFancyButton(text, baseColor)
     btn.Text = text
     btn.TextScaled = true
     btn.Font = Enum.Font.GothamBold
-
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
     btn.MouseEnter:Connect(function()
         tweenService:Create(btn, TweenInfo.new(0.15), {
-            BackgroundColor3 = baseColor:lerp(Color3.new(1,1,1), 0.15)
+            BackgroundColor3 = baseColor:lerp(Color3.new(1, 1, 1), 0.15)
         }):Play()
     end)
     btn.MouseLeave:Connect(function()
@@ -170,15 +148,12 @@ local function createFancyButton(text, baseColor)
             BackgroundColor3 = baseColor
         }):Play()
     end)
-
     return btn
 end
 
--- Auto Stop Toggle Button
-local stopBtnColor = Color3.fromRGB(85, 85, 85)
-local stopBtn = createFancyButton("[A] Auto Stop: ON", stopBtnColor)
+-- Toggle Auto Stop
+local stopBtn = createFancyButton("[A] Auto Stop: ON", Color3.fromRGB(85, 85, 85))
 stopBtn.Parent = frame
-
 stopBtn.MouseButton1Click:Connect(function()
     autoStopOn = not autoStopOn
     stopBtn.Text = autoStopOn and "[A] Auto Stop: ON" or "[A] Auto Stop: OFF"
@@ -187,13 +162,14 @@ end)
 -- Reroll Button
 local rerollBtn = createFancyButton("[B] Reroll Pet Display", Color3.fromRGB(50, 120, 220))
 rerollBtn.Parent = frame
-
 rerollBtn.MouseButton1Click:Connect(function()
     for objectId, data in pairs(displayedEggs) do
-        local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
-        if pet and data.label then
-            data.label.Text = data.eggName .. " | " .. pet
-            data.lastPet = pet
+        if not realESP[data.eggName] then
+            local newPet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
+            if newPet and data.label then
+                data.label.Text = data.eggName .. " | " .. newPet
+                data.lastPet = newPet
+            end
         end
     end
 end)
@@ -202,7 +178,6 @@ end)
 local infoBtn = createFancyButton("?", Color3.fromRGB(90, 160, 60))
 infoBtn.Size = UDim2.new(0, 40, 0, 34)
 infoBtn.Parent = frame
-
 infoBtn.MouseButton1Click:Connect(function()
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
@@ -215,13 +190,11 @@ end)
 
 -- Dragging Logic
 local dragging, dragInput, dragStart, startPos
-
 frame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
         startPos = frame.Position
-
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
@@ -229,16 +202,15 @@ frame.InputBegan:Connect(function(input)
         end)
     end
 end)
-
 frame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         dragInput = input
     end
 end)
-
 userInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                                   startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)

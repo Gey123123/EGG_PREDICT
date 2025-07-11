@@ -1,4 +1,4 @@
--- ✅ FINAL VERSION: Visual Pet Reroll + Original UI Preserved
+-- ✅ FINAL VERSION: Visual Pet Reroll + UI Integrated
 
 local players = game:GetService("Players")
 local collectionService = game:GetService("CollectionService")
@@ -124,7 +124,120 @@ _G.TriggerPetESP_Reroll = function()
     end
 end
 
--- === CONNECT TO UI REROLL BUTTON ===
--- Make sure your UI button [B] calls:
--- _G.TriggerPetESP_Reroll()
--- without modifying the UI above
+-- === UI SECTION: Connect B Button ===
+local gui = Instance.new("ScreenGui")
+gui.Name = "RandomizerGUI"
+gui.ResetOnSpawn = false
+gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 210, 0, 190)
+frame.Position = UDim2.new(1, -220, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+frame.BorderSizePixel = 0
+frame.AnchorPoint = Vector2.new(1, 0)
+frame.Active = true
+frame.Draggable = false
+frame.Parent = gui
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+local layout = Instance.new("UIListLayout", frame)
+layout.Padding = UDim.new(0, 6)
+layout.FillDirection = Enum.FillDirection.Vertical
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "🐾 Pet Selector"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextScaled = true
+title.Parent = frame
+
+local function createFancyButton(text, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -12, 0, 34)
+    btn.BackgroundColor3 = color
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Text = text
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    btn.MouseEnter:Connect(function()
+        tweenService:Create(btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = color:lerp(Color3.new(1,1,1), 0.15)
+        }):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        tweenService:Create(btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = color
+        }):Play()
+    end)
+
+    return btn
+end
+
+-- Auto Stop toggle (optional, preserved)
+local stopBtnColor = Color3.fromRGB(85, 85, 85)
+local autoStopOn = true
+local stopBtn = createFancyButton("[A] Auto Stop: ON", stopBtnColor)
+stopBtn.Parent = frame
+stopBtn.MouseButton1Click:Connect(function()
+    autoStopOn = not autoStopOn
+    stopBtn.Text = autoStopOn and "[A] Auto Stop: ON" or "[A] Auto Stop: OFF"
+end)
+
+-- 🟦 B: REROLL BUTTON (connected)
+local rerollBtn = createFancyButton("[B] Reroll Pet Display", Color3.fromRGB(50, 120, 220))
+rerollBtn.Parent = frame
+rerollBtn.MouseButton1Click:Connect(function()
+    if _G.TriggerPetESP_Reroll then
+        _G.TriggerPetESP_Reroll()
+    end
+end)
+
+-- Info button
+local infoBtn = createFancyButton("?", Color3.fromRGB(90, 160, 60))
+infoBtn.Size = UDim2.new(0, 40, 0, 34)
+infoBtn.Parent = frame
+infoBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Info",
+            Text = "Auto Stop when found: Raccoon, Dragonfly, Queen Bee, Red Fox, Disco Bee, Butterfly.",
+            Duration = 5
+        })
+    end)
+end)
+
+-- Dragging logic
+local dragging, dragInput, dragStart, startPos
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+userInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)

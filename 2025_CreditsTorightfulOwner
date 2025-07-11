@@ -29,43 +29,50 @@ for eggName in pairs(eggChances) do
     print("  - " .. eggName)
 end
 
-local function weightedRandom(options)
-    local total = 0
-    for _, chance in pairs(options) do total = total + chance end
+local function getValidPets(eggName)
+    -- Check if egg exists in our chances table
+    if not eggChances[eggName] then
+        warn("Egg type not found in chances: " .. tostring(eggName))
+        return {}
+    end
     
-    local randomValue = math.random() * total
-    local cumulative = 0
-    
-    for pet, chance in pairs(options) do
-        cumulative = cumulative + chance
-        if randomValue <= cumulative then
-            return pet
+    -- Filter out pets with 0% chance
+    local validPets = {}
+    for pet, chance in pairs(eggChances[eggName]) do
+        if chance > 0 then
+            table.insert(validPets, {pet = pet, chance = chance})
         end
     end
     
-    return next(options)  -- Fallback to first pet
+    return validPets
 end
 
-local function getNonRepeatingRandomPet(eggName, lastPet)
-    local pool = eggChances[eggName]
-    if not pool then 
-        warn("Egg type not found in chances: " .. tostring(eggName))
-        return "?"  -- Return question mark if egg type not found
+local function weightedRandom(eggName)
+    local validPets = getValidPets(eggName)
+    if #validPets == 0 then
+        warn("No valid pets found for egg: " .. tostring(eggName))
+        return "?"  -- Return question mark if no valid pets
     end
     
-    local tries = 0
-    local maxTries = 10
+    -- Calculate total chance
+    local totalChance = 0
+    for _, petData in ipairs(validPets) do
+        totalChance = totalChance + petData.chance
+    end
     
-    while tries < maxTries do
-        local pet = weightedRandom(pool)
-        if pet ~= lastPet or math.random() < 0.3 then
-            return pet
+    -- Generate random number and select pet
+    local randomValue = math.random() * totalChance
+    local cumulativeChance = 0
+    
+    for _, petData in ipairs(validPets) do
+        cumulativeChance = cumulativeChance + petData.chance
+        if randomValue <= cumulativeChance then
+            return petData.pet
         end
-        tries = tries + 1
     end
     
-    -- If we couldn't find a different pet, just return a random one
-    return weightedRandom(pool)
+    -- Fallback to first pet
+    return validPets[1].pet
 end
 
 local function createEspGui(object, labelText)
@@ -111,9 +118,11 @@ local function addESP(egg)
     if realESP[eggName] then
         labelText = eggName
     else
-        firstPet = getNonRepeatingRandomPet(eggName, nil)
+        firstPet = weightedRandom(eggName)
         labelText = eggName .. " | " .. (firstPet or "?")
     end
+    
+    print("Selected pet:", firstPet)
     
     local espGui = createEspGui(egg, labelText)
     if espGui then
@@ -124,6 +133,8 @@ local function addESP(egg)
             eggName = eggName,
             lastPet = firstPet
         }
+    else
+        warn("Failed to create ESP for egg:", eggName)
     end
 end
 
@@ -189,7 +200,7 @@ autoBtn.MouseButton1Click:Connect(function()
     for objectId, data in pairs(displayedEggs) do
         print("Rerolling:", data.eggName)
         
-        local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
+        local pet = weightedRandom(data.eggName)
         if pet then
             print("New pet for", data.eggName, ":", pet)
             

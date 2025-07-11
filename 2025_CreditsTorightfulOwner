@@ -22,6 +22,7 @@ local realESP = {
 }
 local displayedEggs = {}
 local autoStopOn = true
+
 local function weightedRandom(options)
     local valid = {}
     for pet, chance in pairs(options) do
@@ -38,6 +39,7 @@ local function weightedRandom(options)
     end
     return valid[1].pet
 end
+
 local function getNonRepeatingRandomPet(eggName, lastPet)
     local pool = eggChances[eggName]
     if not pool then return nil end
@@ -53,6 +55,7 @@ local function getNonRepeatingRandomPet(eggName, lastPet)
     end
     return selectedPet
 end
+
 local function createEspGui(object, labelText)
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "FakePetESP"
@@ -69,9 +72,10 @@ local function createEspGui(object, labelText)
     label.Font = Enum.Font.SourceSansBold
     label.Text = labelText
     label.Parent = billboard
-    billboard.Parent = object
+    billboard.Parent = game:GetService("CoreGui")  -- Always parent to CoreGui for visibility
     return billboard
 end
+
 local function addESP(egg)
     if egg:GetAttribute("OWNER") ~= localPlayer.Name then return end
     local eggName = egg:GetAttribute("EggName")
@@ -93,6 +97,7 @@ local function addESP(egg)
         lastPet = firstPet
     }
 end
+
 local function removeESP(egg)
     local objectId = egg:GetAttribute("OBJECT_UUID")
     if objectId and displayedEggs[objectId] then
@@ -100,15 +105,19 @@ local function removeESP(egg)
         displayedEggs[objectId] = nil
     end
 end
+
 for _, egg in collectionService:GetTagged("PetEggServer") do
     addESP(egg)
 end
+
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "RandomizerGUI"
 gui.ResetOnSpawn = false
 gui.Parent = localPlayer:WaitForChild("PlayerGui")
+
 local stopBtn = Instance.new("TextButton", gui)
 stopBtn.Size = UDim2.new(0, 150, 0, 40)
 stopBtn.Position = UDim2.new(1, -190, 0, 0)
@@ -120,6 +129,7 @@ stopBtn.MouseButton1Click:Connect(function()
     autoStopOn = not autoStopOn
     stopBtn.Text = autoStopOn and "[A] Auto Stop: ON" or "[A] Auto Stop: OFF"
 end)
+
 local info = Instance.new("TextButton", gui)
 info.Size = UDim2.new(0, 30, 0, 40)
 info.Position = UDim2.new(1, -35, 0, 0)
@@ -136,6 +146,7 @@ info.MouseButton1Click:Connect(function()
         })
     end)
 end)
+
 local autoBtn = Instance.new("TextButton", gui)
 autoBtn.Size = UDim2.new(0, 150, 0, 40)
 autoBtn.Position = UDim2.new(1, -190, 0, 45)
@@ -144,12 +155,26 @@ autoBtn.TextColor3 = Color3.new(1, 1, 1)
 autoBtn.Text = "[B] Reroll Pet Display"
 autoBtn.TextScaled = true
 autoBtn.MouseButton1Click:Connect(function()
+    print("Rerolling pets...")
     for objectId, data in pairs(displayedEggs) do
+        print("Rerolling egg:", data.eggName)
         local pet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
-        if pet and data.label then
-            -- FIX: Update the actual TextLabel's text property
-            data.label.Text = data.eggName .. " | " .. pet
-            data.lastPet = pet
+        if pet then
+            print("New pet:", pet)
+            -- Remove old GUI
+            if data.gui then
+                data.gui:Destroy()
+            end
+            -- Create new GUI with updated pet name
+            local newGui = createEspGui(data.egg, data.eggName .. " | " .. pet)
+            displayedEggs[objectId] = {
+                egg = data.egg,
+                gui = newGui,
+                label = newGui:FindFirstChild("TextLabel"),
+                eggName = data.eggName,
+                lastPet = pet
+            }
         end
     end
+    print("Reroll complete!")
 end)

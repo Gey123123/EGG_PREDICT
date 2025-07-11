@@ -69,7 +69,7 @@ local function createEspGui(object, labelText)
     label.Text = labelText
     label.Parent = billboard
 
-    -- Fix: Parent GUI to CoreGui to prevent disappearing
+    -- FIX: BillboardGui should NOT be parented to the egg
     billboard.Parent = game:GetService("CoreGui")
 
     return billboard, label
@@ -85,6 +85,8 @@ local function addESP(egg)
     local labelText = petPrediction and (eggName .. " | " .. petPrediction) or eggName .. " | ?"
 
     local gui, label = createEspGui(egg, labelText)
+    gui.Adornee = egg:FindFirstChildWhichIsA("BasePart") or egg.PrimaryPart or egg
+
     displayedEggs[objectId] = {
         egg = egg,
         gui = gui,
@@ -109,4 +111,15 @@ end
 collectionService:GetInstanceAddedSignal("PetEggServer"):Connect(addESP)
 collectionService:GetInstanceRemovedSignal("PetEggServer"):Connect(removeESP)
 
--- UI Part is unchanged; place below this if you still need it --
+-- Fix reroll logic only (do not modify UI)
+local function rerollESP()
+    for objectId, data in pairs(displayedEggs) do
+        local newPet = getNonRepeatingRandomPet(data.eggName, data.lastPet)
+        if newPet and data.label then
+            data.label.Text = data.eggName .. " | " .. newPet
+            data.lastPet = newPet
+        end
+    end
+end
+
+_G.TriggerPetESP_Reroll = rerollESP -- You can call this from the UI reroll button

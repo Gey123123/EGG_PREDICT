@@ -104,3 +104,27 @@ local function connectRerollButton()
 end
 
 connectRerollButton()
+
+task.spawn(function()
+    local playerGui = localPlayer:WaitForChild("PlayerGui")
+    local gui = playerGui:WaitForChild("RandomizerGUI", 10) -- waits max 10 seconds
+
+    if gui then
+        for _, obj in pairs(gui:GetDescendants()) do
+            if obj:IsA("TextButton") and obj.Text:find("Reroll") then
+                obj.MouseButton1Click:Connect(function()
+                    for _, data in pairs(displayedEggs) do
+                        local newPet = weightedRandom(eggChances[data.eggName] or {}) or "?"
+                        data.currentPet = newPet
+                        if data.label then
+                            data.label.Text = data.eggName .. " | " .. newPet
+                        end
+                    end
+                end)
+                break
+            end
+        end
+    else
+        warn("RandomizerGUI not found within timeout.")
+    end
+end)
